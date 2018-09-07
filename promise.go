@@ -2,6 +2,7 @@ package promise
 
 import (
 	"fmt"
+	"runtime"
 )
 
 const (
@@ -106,9 +107,6 @@ func (p *Promise) Then(fulfill func(data interface{}) interface{}) *Promise {
 				reject(err)
 			} else {
 				resolve(response)
-				// a tricky way to enable sending resolve and rejeuct channel
-				p.chain.state = pending
-				reject(nil)
 			}
 
 			p.done <- struct{}{}
@@ -133,7 +131,6 @@ func (p *Promise) Catch(rejected func(err error)) *Promise {
 			if rejection != nil {
 				rejected(rejection)
 			}
-			resolve(true)
 			p.done <- struct{}{}
 		}
 
@@ -160,11 +157,23 @@ func (p *Promise) Await() {
 
 	}
 
+	// there maybe an issue with the leak of goroutines
+	fmt.Printf("DEBUG: #goroutines: %d\n", runtime.NumGoroutine())
 }
+
+// TODO: We should rewirte All and implement Race. it is not a simply wait...
+// it will return a single promise that contains all resolution of
+// promises.
 
 // All waits the all promises to complete
 func All(promises ...*Promise) {
 	for _, p := range promises {
 		p.Await()
 	}
+}
+
+// Race return a promise that resolves or rejects as soon
+// as one of the promises resolves or rejects
+func Race(promises ...*Promise) {
+
 }

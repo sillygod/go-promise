@@ -121,13 +121,11 @@ func TestPromiseMassiveThen(t *testing.T) {
 func TestPromiseThenNoErrorCatch(t *testing.T) {
 
 	p := New(func(resolve func(interface{}), reject func(error)) {
-		resolve(map[string]string{
-			"a": "apple",
-			"b": "banana",
-		})
+		resolve(123)
 	})
 
 	p.Then(func(data interface{}) interface{} {
+		assertEqual(t, 123, data.(int))
 		return nil
 	}).Catch(func(err error) {
 		t.Error("unexpted behavior, it should not enter here.")
