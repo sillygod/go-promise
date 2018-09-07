@@ -73,6 +73,10 @@ func (p *Promise) reject(err error) {
 	p.rejectChannel <- err
 }
 
+func (p *Promise) resetState() {
+	p.state = pending
+}
+
 // Resolve return a new Promise as a resolved promise
 func (p *Promise) Resolve(value interface{}) *Promise {
 	return New(func(resolve func(interface{}), reject func(error)) {
@@ -100,6 +104,10 @@ func (p *Promise) Then(fulfill func(data interface{}) interface{}) *Promise {
 
 		select {
 		case resolution := <-p.resolveChannel:
+			defer func() {
+				p.done <- struct{}{}
+			}()
+
 			p.chain = result
 			response := fulfill(resolution)
 
@@ -109,7 +117,6 @@ func (p *Promise) Then(fulfill func(data interface{}) interface{}) *Promise {
 				resolve(response)
 			}
 
-			p.done <- struct{}{}
 		}
 	})
 
@@ -127,11 +134,19 @@ func (p *Promise) Catch(rejected func(err error)) *Promise {
 		select {
 
 		case rejection := <-p.rejectChannel:
+			defer func() {
+				p.done <- struct{}{}
+			}()
+
 			p.chain = result
+
 			if rejection != nil {
+				defer result.resolve(true)
 				rejected(rejection)
+				// it seems that it's legal to chain with then after a catch
+				// even there is no error happen.
+				// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises#Chaining_after_a_catch
 			}
-			p.done <- struct{}{}
 		}
 
 	})

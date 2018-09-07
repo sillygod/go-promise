@@ -59,6 +59,26 @@ func TestPromiseBasicCatch(t *testing.T) {
 	p.Await()
 }
 
+func TestChainThenAfterCatch(t *testing.T) {
+	p := New(func(resolve func(interface{}), reject func(error)) {
+		resolve("hi")
+	})
+
+	p.Then(func(data interface{}) interface{} {
+		return errors.New("ohla ohla")
+	}).Catch(func(err error) {
+		t.Log("ha")
+		assertEqual(t, "ohla ohla", err.Error())
+	}).Then(func(data interface{}) interface{} {
+		t.Log("enter")
+		gate := "enter"
+		assertEqual(t, "enter", gate)
+		return nil
+	})
+
+	p.Await()
+}
+
 func TestPromiseErrorInThen(t *testing.T) {
 
 	p := New(func(resolve func(interface{}), reject func(error)) {
