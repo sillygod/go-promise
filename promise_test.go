@@ -59,6 +59,28 @@ func TestPromiseBasicCatch(t *testing.T) {
 	p.Await()
 }
 
+func TestChaining(t *testing.T) {
+	p := New(func(resolve func(interface{}), reject func(error)) {
+		fmt.Println("Initial")
+		resolve("Initial")
+	})
+
+	p.Then(func(data interface{}) interface{} {
+		panic("Something failed")
+
+		fmt.Println("Do this")
+		return nil
+	}).Catch(func(err error) {
+		fmt.Println("Do that")
+	}).Then(func(data interface{}) interface{} {
+		fmt.Println("Do this, no matter what happened before")
+		return nil
+	})
+
+	p.Await()
+
+}
+
 func TestChainThenAfterCatch(t *testing.T) {
 	p := New(func(resolve func(interface{}), reject func(error)) {
 		resolve("hi")

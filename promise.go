@@ -54,6 +54,8 @@ func New(executor func(resolve func(interface{}), reject func(error))) *Promise 
 				} else {
 					promise.reject(fmt.Errorf("%v", r))
 				}
+
+				// promise.done <- struct{}{}
 			}
 		}()
 
@@ -104,19 +106,24 @@ func (p *Promise) Then(fulfill func(data interface{}) interface{}) *Promise {
 
 		select {
 		case resolution := <-p.resolveChannel:
-			defer func() {
-				p.done <- struct{}{}
+			func() {
+				defer func() {
+					p.done <- struct{}{}
+				}()
+
+				p.chain = result
+				response := fulfill(resolution)
+
+				if err, ok := response.(error); ok && err != nil {
+					reject(err)
+				} else {
+					resolve(response)
+					result.resetState()
+					reject(nil)
+					// will cause goroutine dead asleep <= need to think why
+				}
+
 			}()
-
-			p.chain = result
-			response := fulfill(resolution)
-
-			if err, ok := response.(error); ok && err != nil {
-				reject(err)
-			} else {
-				resolve(response)
-			}
-
 		}
 	})
 
@@ -134,19 +141,26 @@ func (p *Promise) Catch(rejected func(err error)) *Promise {
 		select {
 
 		case rejection := <-p.rejectChannel:
-			defer func() {
-				p.done <- struct{}{}
+
+			func() {
+				defer func() {
+					if rejection != nil {
+						result.resolve(true)
+					}
+					p.done <- struct{}{}
+				}()
+
+				p.chain = result
+
+				if rejection != nil {
+					rejected(rejection)
+					// it seems that it's legal to chain with then after a catch
+					// even there is no error happen.
+					// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises#Chaining_after_a_catch
+				}
+
 			}()
 
-			p.chain = result
-
-			if rejection != nil {
-				defer result.resolve(true)
-				rejected(rejection)
-				// it seems that it's legal to chain with then after a catch
-				// even there is no error happen.
-				// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises#Chaining_after_a_catch
-			}
 		}
 
 	})
@@ -159,20 +173,16 @@ func (p *Promise) Catch(rejected func(err error)) *Promise {
 func (p *Promise) Await() {
 
 	for p != nil && !p.isLast {
-
 		_, opened := <-p.done
 		if opened {
 			close(p.done)
 		}
 		p = p.chain
 
-		if p.chain == nil {
-			break
-		}
-
 	}
 
 	// there maybe an issue with the leak of goroutines
+	// use context to control process flow
 	fmt.Printf("DEBUG: #goroutines: %d\n", runtime.NumGoroutine())
 }
 
@@ -191,4 +201,6 @@ func All(promises ...*Promise) {
 // as one of the promises resolves or rejects
 func Race(promises ...*Promise) {
 
+	//https://stackoverflow.com/questions/19992334/how-to-listen-to-n-channels-dynamic-select-statement
+	// maybe we can learn some idea from this post
 }
