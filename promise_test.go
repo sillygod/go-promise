@@ -3,6 +3,7 @@ package promise
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -82,16 +83,22 @@ func TestChaining(t *testing.T) {
 }
 
 func TestChainThenAfterCatch(t *testing.T) {
+
+	signal := "" // signal to record the promise flow
+
 	p := New(func(resolve func(interface{}), reject func(error)) {
 		resolve("hi")
 	})
 
 	p.Then(func(data interface{}) interface{} {
+		signal += "then->"
 		return errors.New("ohla ohla")
 	}).Catch(func(err error) {
+		signal += "catch->"
 		t.Log("ha")
 		assertEqual(t, "ohla ohla", err.Error())
 	}).Then(func(data interface{}) interface{} {
+		signal += "then->"
 		t.Log("enter")
 		gate := "enter"
 		assertEqual(t, "enter", gate)
@@ -99,6 +106,7 @@ func TestChainThenAfterCatch(t *testing.T) {
 	})
 
 	p.Await()
+	assertEqual(t, "then->catch->then->", signal)
 }
 
 func TestPromiseErrorInThen(t *testing.T) {
@@ -157,6 +165,9 @@ func TestPromiseMassiveThen(t *testing.T) {
 
 	t.Logf("promises %v\n", promises)
 	All(promises...)
+
+	time.Sleep(time.Second * 3) // to wait a little peroid for done channel complete
+	assertEqual(t, 2, runtime.NumGoroutine())
 
 }
 

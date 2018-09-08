@@ -1,8 +1,8 @@
 package promise
 
 import (
+	"context"
 	"fmt"
-	"runtime"
 )
 
 const (
@@ -28,11 +28,13 @@ type Promise struct {
 	// to next promise when the channel received data which is dynamically
 	// decided.
 
+	ctx    context.Context // used for cleaning leak goroutine
+	endSig context.CancelFunc
+
 	done chan struct{} // the signal for promise is done
 }
 
-// New instantiate a new promise object
-func New(executor func(resolve func(interface{}), reject func(error))) *Promise {
+func newWithContext(ctx context.Context, endSig context.CancelFunc, executor func(resolve func(interface{}), reject func(error))) *Promise {
 
 	promise := &Promise{
 		state:          pending,
@@ -40,6 +42,8 @@ func New(executor func(resolve func(interface{}), reject func(error))) *Promise 
 		resolveChannel: make(chan interface{}, 1),
 		rejectChannel:  make(chan error, 1),
 		chain:          nil,
+		ctx:            ctx,
+		endSig:         endSig,
 		isLast:         true,
 		done:           make(chan struct{}),
 	}
@@ -64,6 +68,12 @@ func New(executor func(resolve func(interface{}), reject func(error))) *Promise 
 	}()
 
 	return promise
+}
+
+// New instantiate a new promise object
+func New(executor func(resolve func(interface{}), reject func(error))) *Promise {
+	ctx, cancel := context.WithCancel(context.Background())
+	return newWithContext(ctx, cancel, executor)
 }
 
 func (p *Promise) reject(err error) {
@@ -102,8 +112,11 @@ func (p *Promise) Then(fulfill func(data interface{}) interface{}) *Promise {
 	// we can make fulfill to return error or a new promise with the value it returned
 	var result *Promise
 
-	result = New(func(resolve func(interface{}), reject func(error)) {
+	result = newWithContext(p.ctx, p.endSig, func(resolve func(interface{}), reject func(error)) {
 
+		// TODO: to check defer will trigger or not
+		// if we don't wrap it in a function when the select
+		// over
 		select {
 		case resolution := <-p.resolveChannel:
 			func() {
@@ -124,6 +137,7 @@ func (p *Promise) Then(fulfill func(data interface{}) interface{}) *Promise {
 				}
 
 			}()
+		case <-p.ctx.Done():
 		}
 	})
 
@@ -136,7 +150,7 @@ func (p *Promise) Catch(rejected func(err error)) *Promise {
 
 	var result *Promise
 
-	result = New(func(resolve func(interface{}), reject func(error)) {
+	result = newWithContext(p.ctx, p.endSig, func(resolve func(interface{}), reject func(error)) {
 
 		select {
 
@@ -160,7 +174,7 @@ func (p *Promise) Catch(rejected func(err error)) *Promise {
 				}
 
 			}()
-
+		case <-p.ctx.Done():
 		}
 
 	})
@@ -181,9 +195,9 @@ func (p *Promise) Await() {
 
 	}
 
-	// there maybe an issue with the leak of goroutines
-	// use context to control process flow
-	fmt.Printf("DEBUG: #goroutines: %d\n", runtime.NumGoroutine())
+	// there maybe an issue with the leak of goroutines so use context
+	// to control process flow
+	p.endSig()
 }
 
 // TODO: We should rewirte All and implement Race. it is not a simply wait...
