@@ -246,3 +246,25 @@ func TestWaitAllPromise(t *testing.T) {
 
 	assertEqual(t, 4, int(time.Since(start).Seconds()))
 }
+
+func TestRace(t *testing.T) {
+
+	p1 := New(func(resolve func(interface{}), reject func(error)) {
+		time.Sleep(time.Second * 2)
+		resolve(1)
+	})
+
+	p2 := New(func(resolve func(interface{}), reject func(error)) {
+		time.Sleep(time.Second * 3)
+		resolve(2)
+	})
+
+	race := Race(p1, p2)
+
+	race.Then(func(data interface{}) interface{} {
+		fmt.Println(data)
+		return nil
+	})
+
+	race.Await()
+}

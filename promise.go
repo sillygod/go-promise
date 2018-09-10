@@ -3,6 +3,7 @@ package promise
 import (
 	"context"
 	"fmt"
+	"reflect"
 )
 
 const (
@@ -12,6 +13,9 @@ const (
 )
 
 // Promise mimics the javascript's promise
+// currently, use single linked list to implement the chain
+// of promise.
+// TODO maybe consider to use double linked list instead
 type Promise struct {
 
 	// state pending 0, fullfilled 1, rejected 2
@@ -20,6 +24,7 @@ type Promise struct {
 	executor       func(resolve func(interface{}), reject func(error))
 	resolveChannel chan interface{}
 	rejectChannel  chan error
+	result         interface{} // store the result when resolve, current reject not consider
 	chain          *Promise
 
 	isLast bool
@@ -27,6 +32,11 @@ type Promise struct {
 	// we can not judge by chain is nil because the chain is assigned
 	// to next promise when the channel received data which is dynamically
 	// decided.
+
+	lastResult     interface{}
+	lastResultChan chan struct{}
+	// lastResult and lastResultChan are used to store resutl of the last promise in the chain
+	// and send the signal to channel for race function
 
 	ctx    context.Context // used for cleaning leak goroutine
 	endSig context.CancelFunc
@@ -45,6 +55,7 @@ func newWithContext(ctx context.Context, endSig context.CancelFunc, executor fun
 		ctx:            ctx,
 		endSig:         endSig,
 		isLast:         true,
+		lastResultChan: make(chan struct{}),
 		done:           make(chan struct{}),
 	}
 
@@ -74,6 +85,13 @@ func newWithContext(ctx context.Context, endSig context.CancelFunc, executor fun
 func New(executor func(resolve func(interface{}), reject func(error))) *Promise {
 	ctx, cancel := context.WithCancel(context.Background())
 	return newWithContext(ctx, cancel, executor)
+}
+
+// Reject return a new Promise as a reject promise
+func (p *Promise) Reject(err error) *Promise {
+	return New(func(resolve func(interface{}), reject func(error)) {
+		reject(err)
+	})
 }
 
 func (p *Promise) reject(err error) {
@@ -114,9 +132,6 @@ func (p *Promise) Then(fulfill func(data interface{}) interface{}) *Promise {
 
 	result = newWithContext(p.ctx, p.endSig, func(resolve func(interface{}), reject func(error)) {
 
-		// TODO: to check defer will trigger or not
-		// if we don't wrap it in a function when the select
-		// over
 		select {
 		case resolution := <-p.resolveChannel:
 			func() {
@@ -126,6 +141,7 @@ func (p *Promise) Then(fulfill func(data interface{}) interface{}) *Promise {
 
 				p.chain = result
 				response := fulfill(resolution)
+				p.result = response
 
 				if err, ok := response.(error); ok && err != nil {
 					reject(err)
@@ -133,7 +149,6 @@ func (p *Promise) Then(fulfill func(data interface{}) interface{}) *Promise {
 					resolve(response)
 					result.resetState()
 					reject(nil)
-					// will cause goroutine dead asleep <= need to think why
 				}
 
 			}()
@@ -159,6 +174,9 @@ func (p *Promise) Catch(rejected func(err error)) *Promise {
 			func() {
 				defer func() {
 					if rejection != nil {
+						// it seems that it's legal to chain with then after a catch
+						// even there is no error happen.
+						// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises#Chaining_after_a_catch
 						result.resolve(true)
 					}
 					p.done <- struct{}{}
@@ -168,9 +186,6 @@ func (p *Promise) Catch(rejected func(err error)) *Promise {
 
 				if rejection != nil {
 					rejected(rejection)
-					// it seems that it's legal to chain with then after a catch
-					// even there is no error happen.
-					// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises#Chaining_after_a_catch
 				}
 
 			}()
@@ -183,38 +198,109 @@ func (p *Promise) Catch(rejected func(err error)) *Promise {
 	return result
 }
 
-// Await waits the promise to complete
-func (p *Promise) Await() {
+// completeChan return the done channel of the last promise
+func (p *Promise) completeChan() chan struct{} {
 
-	for p != nil && !p.isLast {
-		_, opened := <-p.done
-		if opened {
-			close(p.done)
-		}
+	var pre *Promise
+
+	for p != nil {
+		pre = p
 		p = p.chain
+	}
+
+	return pre.done
+}
+
+// Await waits the promise to complete and return the result of last
+// last promise in the chain
+func (p *Promise) Await() *Promise {
+
+	ptr := p
+	pre := p
+	if ptr.isLast {
+		// promise is not called by any method like Then or Catch
+
+		ptr.Then(func(data interface{}) interface{} {
+			return data
+		})
+	}
+
+	for ptr != nil && !ptr.isLast {
+		_, opened := <-ptr.done
+		if opened {
+			close(ptr.done)
+		}
+
+		pre = ptr
+		ptr = ptr.chain
 
 	}
 
-	// there maybe an issue with the leak of goroutines so use context
-	// to control process flow
+	p.lastResult = pre.result
+
+	go func() {
+		p.lastResultChan <- struct{}{}
+		ptr.done <- struct{}{}
+	}()
+	// make the unreached promise closed, this will be used to judge
+	// the completion of promise chain
+
 	p.endSig()
+	// there maybe an issue with the leak of goroutines so use context
+	// to control process flow. Sending the end signal to the unreached
+	// promise to make them done.
+
+	return pre
 }
 
-// TODO: We should rewirte All and implement Race. it is not a simply wait...
-// it will return a single promise that contains all resolution of
-// promises.
+// All return a single promise that settled all of the promises
+func All(promises ...*Promise) *Promise {
 
-// All waits the all promises to complete
-func All(promises ...*Promise) {
+	result := make([]interface{}, 0, len(promises))
+
 	for _, p := range promises {
 		p.Await()
+		result = append(result, p.lastResult)
 	}
+
+	p := New(func(resolve func(interface{}), reject func(error)) {
+		resolve(result)
+	})
+
+	return p
 }
 
-// Race return a promise that resolves or rejects as soon
-// as one of the promises resolves or rejects
-func Race(promises ...*Promise) {
+// Race return a promise that resolves or rejects as soon as
+// one of the promises resolves or rejects
+func Race(promises ...*Promise) *Promise {
+
+	cases := make([]reflect.SelectCase, 0, len(promises))
 
 	//https://stackoverflow.com/questions/19992334/how-to-listen-to-n-channels-dynamic-select-statement
 	// maybe we can learn some idea from this post
+
+	for _, p := range promises {
+
+		cases = append(cases, reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(p.lastResultChan),
+		})
+
+		go func(ip *Promise) {
+			ip.Await()
+		}(p)
+
+	}
+
+	for {
+		chosen, _, ok := reflect.Select(cases) // how about remains
+		if ok {
+			p := New(func(resolve func(interface{}), reject func(error)) {
+				resolve(promises[chosen].lastResult)
+			})
+
+			return p
+		}
+	}
+
 }
