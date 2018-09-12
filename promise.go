@@ -18,7 +18,7 @@ const (
 // TODO maybe consider to use double linked list instead
 type Promise struct {
 
-	// state pending 0, fullfilled 1, rejected 2
+	// state pending 0, fulfilled 1, rejected 2
 	state int
 
 	executor       func(resolve func(interface{}), reject func(error))
@@ -211,6 +211,7 @@ func (p *Promise) completeChan() chan struct{} {
 	return pre.done
 }
 
+// Await wait a promise to complete
 func Await(p *Promise) *Promise {
 
 	ptr := p

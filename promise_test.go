@@ -68,9 +68,7 @@ func TestChaining(t *testing.T) {
 
 	p.Then(func(data interface{}) interface{} {
 		panic("Something failed")
-
-		fmt.Println("Do this")
-		return nil
+		// fmt.Println("Do this") this won't reach
 	}).Catch(func(err error) {
 		fmt.Println("Do that")
 	}).Then(func(data interface{}) interface{} {
