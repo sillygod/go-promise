@@ -55,7 +55,7 @@ func newWithContext(ctx context.Context, endSig context.CancelFunc, executor fun
 		ctx:            ctx,
 		endSig:         endSig,
 		isLast:         true,
-		lastResultChan: make(chan struct{}),
+		lastResultChan: make(chan struct{}, 1),
 		done:           make(chan struct{}),
 	}
 
@@ -211,9 +211,7 @@ func (p *Promise) completeChan() chan struct{} {
 	return pre.done
 }
 
-// Await waits the promise to complete and return the result of last
-// last promise in the chain
-func (p *Promise) Await() *Promise {
+func Await(p *Promise) *Promise {
 
 	ptr := p
 	pre := p
@@ -240,7 +238,6 @@ func (p *Promise) Await() *Promise {
 
 	go func() {
 		p.lastResultChan <- struct{}{}
-		ptr.done <- struct{}{}
 	}()
 	// make the unreached promise closed, this will be used to judge
 	// the completion of promise chain
@@ -251,6 +248,7 @@ func (p *Promise) Await() *Promise {
 	// promise to make them done.
 
 	return pre
+
 }
 
 // All return a single promise that settled all of the promises
@@ -259,7 +257,7 @@ func All(promises ...*Promise) *Promise {
 	result := make([]interface{}, 0, len(promises))
 
 	for _, p := range promises {
-		p.Await()
+		Await(p)
 		result = append(result, p.lastResult)
 	}
 
@@ -287,13 +285,15 @@ func Race(promises ...*Promise) *Promise {
 		})
 
 		go func(ip *Promise) {
-			ip.Await()
+			Await(ip)
 		}(p)
 
 	}
 
 	for {
-		chosen, _, ok := reflect.Select(cases) // how about remains
+		chosen, _, ok := reflect.Select(cases)
+		// how about remains, it's good to stop other cases's process
+		// to reduce the resource spend
 		if ok {
 			p := New(func(resolve func(interface{}), reject func(error)) {
 				resolve(promises[chosen].lastResult)

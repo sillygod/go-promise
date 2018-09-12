@@ -25,7 +25,7 @@ p.Then(func(data interface{}) interface{} {
     return nil
 })
 
-p.Await()
+Await(p)
 
 ```
 
@@ -91,5 +91,5 @@ p.Then(func(data interface{}) interface{} {
     return nil
 })
 
-p.Await()
+Await(p)
 ```

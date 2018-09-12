@@ -35,7 +35,7 @@ func TestPromiseBasicThen(t *testing.T) {
 		return nil
 	})
 
-	p.Await()
+	Await(p)
 }
 
 func TestPromiseBasicCatch(t *testing.T) {
@@ -57,7 +57,7 @@ func TestPromiseBasicCatch(t *testing.T) {
 		t.Error("we don't expected to enter here")
 	})
 
-	p.Await()
+	Await(p)
 }
 
 func TestChaining(t *testing.T) {
@@ -78,7 +78,7 @@ func TestChaining(t *testing.T) {
 		return nil
 	})
 
-	p.Await()
+	Await(p)
 
 }
 
@@ -105,7 +105,7 @@ func TestChainThenAfterCatch(t *testing.T) {
 		return nil
 	})
 
-	p.Await()
+	Await(p)
 	assertEqual(t, "then->catch->then->", signal)
 }
 
@@ -130,7 +130,7 @@ func TestPromiseErrorInThen(t *testing.T) {
 		assertEqual(t, err.Error(), "wow")
 	})
 
-	p.Await()
+	Await(p)
 }
 
 func TestPromiseMassiveThen(t *testing.T) {
@@ -184,7 +184,7 @@ func TestPromiseThenNoErrorCatch(t *testing.T) {
 		t.Error("unexpted behavior, it should not enter here.")
 	})
 
-	p.Await()
+	Await(p)
 }
 
 func TestPromiseChainThen(t *testing.T) {
@@ -205,7 +205,7 @@ func TestPromiseChainThen(t *testing.T) {
 		return res
 	})
 
-	p.Await()
+	Await(p)
 }
 
 func TestWaitAllPromise(t *testing.T) {
@@ -262,9 +262,9 @@ func TestRace(t *testing.T) {
 	race := Race(p1, p2)
 
 	race.Then(func(data interface{}) interface{} {
-		fmt.Println(data)
+		assertEqual(t, 1, data.(int))
 		return nil
 	})
 
-	race.Await()
+	Await(race)
 }
