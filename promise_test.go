@@ -38,6 +38,11 @@ func TestPromiseBasicThen(t *testing.T) {
 	Await(p)
 }
 
+func TestResolve(t *testing.T) {
+	p := Resolve("hello world")
+	assertEqual(t, "hello world", Await(p))
+}
+
 func TestPromiseBasicCatch(t *testing.T) {
 
 	p := New(func(resolve func(interface{}), reject func(error)) {

@@ -88,7 +88,7 @@ func New(executor func(resolve func(interface{}), reject func(error))) *Promise 
 }
 
 // Reject return a new Promise as a reject promise
-func (p *Promise) Reject(err error) *Promise {
+func Reject(err error) *Promise {
 	return New(func(resolve func(interface{}), reject func(error)) {
 		reject(err)
 	})
@@ -108,7 +108,7 @@ func (p *Promise) resetState() {
 }
 
 // Resolve return a new Promise as a resolved promise
-func (p *Promise) Resolve(value interface{}) *Promise {
+func Resolve(value interface{}) *Promise {
 	return New(func(resolve func(interface{}), reject func(error)) {
 		resolve(value)
 	})
@@ -211,8 +211,8 @@ func (p *Promise) completeChan() chan struct{} {
 	return pre.done
 }
 
-// Await wait a promise to complete
-func Await(p *Promise) *Promise {
+// Await wait a promise to complete and return the result
+func Await(p *Promise) interface{} {
 
 	ptr := p
 	pre := p
@@ -248,7 +248,7 @@ func Await(p *Promise) *Promise {
 	// to control process flow. Sending the end signal to the unreached
 	// promise to make them done.
 
-	return pre
+	return pre.result
 
 }
 

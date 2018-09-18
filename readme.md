@@ -13,7 +13,7 @@ go get -u github.com/sillygod/go-promise
 
 # Example Usages
 
-a simple example list in the following.
+a simple example list in the following. Note I ignore the package name (promise)
 
 ```golang
 
@@ -28,6 +28,15 @@ p.Then(func(data interface{}) interface{} {
 })
 
 Await(p)
+
+```
+
+or more simple usage
+
+```golang
+
+p := Resolve("hello")
+value := Await(p)
 
 ```
 
@@ -95,3 +104,5 @@ p.Then(func(data interface{}) interface{} {
 
 Await(p)
 ```
+
+I also implement `all` and `race` feature and you can see them in the test file.
