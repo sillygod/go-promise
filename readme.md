@@ -1,5 +1,6 @@
 # Go-promise
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/22fee76299304f5eadef92b81c30d63e)](https://app.codacy.com/app/sillygod/go-promise?utm_source=github.com&utm_medium=referral&utm_content=sillygod/go-promise&utm_campaign=Badge_Grade_Settings)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sillygod/go-promise)](https://goreportcard.com/report/github.com/sillygod/go-promise) [![GitHub license](https://img.shields.io/github/license/sillygod/go-promise.svg)](https://github.com/sillygod/go-promise/blob/master/LICENSE)
 
 This is an experimental implementation of [javascript's promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) in golang. Why implement this? Actually, golang is not suitable to implement generic purpose library and it has a good async funtion with `select`, `go routine`, `channel`. I have to say those tools are powerful. In javascript, you have to use `promise` or `async await` to achieve the same effect. However, I think `promise` is a asynchronous pattern not a basic async funtion so I am interested at implementation it in golang. That's why I create this repo.
