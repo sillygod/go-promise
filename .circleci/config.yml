@@ -9,6 +9,6 @@ jobs:
       - run: mkdir test-reports
       - run:
           name: Test
-          command: gotestsum --junitfile test-reports/unit-tests.xml
+          command: gotestsum --format standard-verbose --junitfile test-reports/unit-tests.xml
       - store_test_results:
           path: test-reports/
