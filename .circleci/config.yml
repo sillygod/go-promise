@@ -1,0 +1,14 @@
+version: 2
+jobs:
+  build:
+    working_directory: /go/src/github.com/sillygod/go-promise
+    docker:
+      - image: circleci/golang:1.12
+    steps:
+      - checkout
+      - run: mkdir test-reports
+      - run:
+          name: Test
+          command: gotestsum --junitfile test-reports/unit-tests.xml
+      - store_test_results:
+          path: test-reports/
