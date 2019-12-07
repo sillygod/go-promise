@@ -1,0 +1,16 @@
+version = 1
+
+test_patterns = [
+  "*test.go"
+]
+
+exclude_patterns = [
+  ".circleci/"
+]
+
+[[analyzers]]
+name = "go"
+enabled = true
+
+  [analyzers.meta]
+  import_path = "github.com/sillygod/go-promise"
